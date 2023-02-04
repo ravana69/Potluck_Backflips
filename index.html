@@ -1,0 +1,311 @@
+	
+<!DOCTYPE html>
+<html lang="en">
+	
+<!-- Mirrored from www.vincemckelvie.com/Potluck/Backflips/ by HTTrack Website Copier/3.x [XR&CO'2014], Sat, 04 Feb 2023 06:30:25 GMT -->
+<head>
+		<title>backflips</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        
+        <meta property="og:image" content="fb.png"/>
+        <meta property="og:title" content="backflips"/>
+        <meta property="og:description" content=""/>
+        <meta property="og:url" content="index.html"/>
+        
+		<style>
+			
+			body {
+				color: #fff;
+				font-family:Helvetica, sans-serif;
+				font-size:13px;
+				text-align:center;
+				background-color: #000;
+				margin: 0px;
+				overflow: hidden;
+				cursor: none;
+			}
+
+			#info {
+				position: absolute;
+				bottom: 10px; 
+				right:10px;
+				padding:4px; 
+				text-align:right;
+				background:#000;
+				-webkit-transition:opacity .5s ease-out;-moz-transition:opacity .5s ease-out;-o-transition:opacity .5s ease-out;
+			}
+			#info a {
+				color:#fff;
+				text-decoration:underline;
+			}
+			
+		</style>
+	</head>
+	<body>	
+		
+		<div id="container"></div>
+        
+        <div id="info">
+        	scrool wheel to zoom<br/>
+            see the full series <a href="http://vincemckelvie.tumblr.com/hag">here</a><br/>
+        	based on this <a href="http://vincemckelvie.tumblr.com/post/67770481102/view-webgl-version-here" target="_blank">.gif</a><br/>
+            download the files <a href="files.zip" target="_blank">here.</a><br/>
+        </div>
+        
+		<script src="Scripts/JS/three.min.js"></script>
+		<script src="Scripts/JS/Detector.js"></script>
+
+		<script>
+
+			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+			
+			window.onload = init;
+
+			var container, stats;
+
+			var camera, scene, renderer;
+
+			var mesh, light, dlight, bg;
+
+			var mouseX = 0, mouseY = 0;
+
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+
+			var sphere, torus;
+			
+			var inc=0.0, cf=0.0, hue=0.0, to, len = 15, inc2=0.0;
+			
+			var rotHolders=[], meshes=[], cameraParent, master, bwTexture;
+			
+			var canFade=false;
+			
+			var info;
+			
+			var clock = new THREE.Clock();
+			
+			
+			var path = "Assets/Images/CubeMap/index.html";
+			var format = '.png';
+			var urls = [
+				path + 'px' + format, path + 'nx' + format,
+				path + 'py' + format, path + 'ny' + format,
+				path + 'pz' + format, path + 'nz' + format
+			];
+
+			function init() {
+				
+				container = document.getElementById( 'container' );
+				
+				info = document.getElementById("info");
+				setTimeout(function(){canFade = true;},4000);
+				
+				camera = new THREE.PerspectiveCamera( 25, window.innerWidth / window.innerHeight, 1, 10000 );
+				scene = new THREE.Scene();
+				
+				cameraParent = new THREE.Object3D();
+				scene.add(cameraParent);
+				
+				master = new THREE.Object3D();
+				scene.add(master);
+				
+				bwTexture = THREE.ImageUtils.loadTexture('Assets/Images/bw.jpg');
+				
+				bg = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000, 1, 1), 
+				new THREE.MeshBasicMaterial({transparent:true, opacity:.1, color:0xffffff, map:bwTexture}));
+				
+				bg.position.z = -80;
+				cameraParent.add(bg);
+				
+				
+				var sphereMat = new THREE.MeshBasicMaterial({side:THREE.DoubleSide});
+				sphere = new THREE.Mesh(new THREE.SphereGeometry(.5, 20, 20), sphereMat);
+				torus = new THREE.Mesh(new THREE.TorusGeometry(3, .2, 20, 60), sphereMat);
+				
+				torus.rotation.x=Math.PI/2;
+				scene.add(sphere);
+				scene.add(torus);
+				
+				light = new THREE.PointLight( 0xffffff, 1.5 );
+				scene.add( light );
+				
+				dlight = new THREE.DirectionalLight( 0xffffff, 1.5 );
+				scene.add(dlight);
+				
+				var ambient = new THREE.AmbientLight( 0x404040 ); // soft white light
+				scene.add( ambient );
+
+				renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer:true});
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.autoClear = true;
+				renderer.autoClearDepth = true;
+				renderer.autoClearColor = false;
+				renderer.autoClearSencil = true;
+								
+				renderer.sortObjects = false;
+
+				container.appendChild( renderer.domElement );
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'mousewheel', onDocumentMouseWheel, false );
+				document.addEventListener( 'DOMMouseScroll', onDocumentMouseWheel, false);
+				
+				
+				var loader = new THREE.JSONLoader();
+				loader.load( "Assets/Scene/scene.js", createScene );
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+				loop();
+
+			}
+
+			function onWindowResize() {
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function createScene( geometry, materials ) {
+				
+				var reflectionCube = THREE.ImageUtils.loadTextureCube( urls );
+				reflectionCube.format = THREE.RGBFormat;
+
+				var material= new THREE.MeshLambertMaterial({color:0xffffff,ambient:0xffffff, /*combine:THREE.MixOperation,*/envMap: reflectionCube,reflectivity: 0.8} )		
+				
+				for( var i = 0; i < len; i ++ ) {
+					
+					rotHolders[i] = new THREE.Object3D();
+					master.add(rotHolders[i]);
+					meshes[i] = new THREE.Mesh( geometry, material, false );
+					
+					var rad = 2.8;
+					
+					var s = 360/len;
+					
+					var angle = (i*s)*(Math.PI/180);
+					var xPos = (Math.cos(angle) * rad);
+    				var zPos = (Math.sin(angle) * rad); 
+					
+					rotHolders[i].position.x = xPos
+					rotHolders[i].position.z = zPos;
+					
+					rotHolders[i].rotation.y -= (Math.PI/2)+(angle);
+									
+					rotHolders[i].add( meshes[i]);
+				}
+				
+			}
+
+			function onDocumentMouseMove( event ) {
+
+				mouseX = ( event.clientX - windowHalfX );
+				mouseY = ( event.clientY - windowHalfY );
+				
+				if(canFade){
+					if(event.clientY > (windowHalfY*2)-100 && event.clientX > (windowHalfX*2)-200){
+						info.style.opacity = 1;
+					}else{
+						info.style.opacity = 0;
+					}
+				}
+				
+			}
+
+			function loop() {
+				
+				requestAnimationFrame( loop, renderer.domElement );
+				
+				if(light){
+					
+					var mult = .5+Math.sin(inc)*.5;
+					hue=.5+Math.sin(inc*(mult*20))*.5;
+					
+					var hew = 0.0;
+					if(hue<.5)hew = 0.0;
+					else hew = 1.0;
+					
+				
+					light.color.setHSL(0.0, 0.0, hew );
+					dlight.color = light.color;
+					
+					if(sphere){
+						sphere.material.color = light.color;
+					}				
+				}
+				
+				if(bwTexture){
+					bwTexture.wrapS = bwTexture.wrapT = THREE.RepeatWrapping;
+					bwTexture.repeat.set( 1, 1 );
+					
+					bwTexture.offset.y += .0008;
+					//bwTexture.offset.x += xOff2;
+					//bwTexture.needsUpdate = true;	
+				}
+				
+				for(var i=0; i<len; i++){
+					if(meshes[i]){
+						meshes[i].rotation.x = i*.4-inc;
+						//var h = i*.002);
+						//h = h%1.0;
+						
+						//meshes[i].material.color.setHSL(h,1.0,.5);	
+					}
+				}
+			
+	
+				inc2+= (mouseX-inc) * .00002;	
+				inc +=.008;
+				
+				var xPos = Math.sin(inc2)*7;
+				var zPos = Math.cos(inc2)*7;
+				
+				camera.position.x = xPos;
+				camera.position.z = zPos;
+				
+				camera.position.y += ( -mouseY - camera.position.y ) * .00009;
+				
+				var maxY = 10;
+				if(camera.position.y >maxY) camera.position.y = maxY;
+				if(camera.position.y <-maxY) camera.position.y = -maxY;
+				
+				camera.lookAt( new THREE.Vector3(0, 0, 0));
+				
+				cameraParent.rotation.copy( camera.rotation );
+				cameraParent.position.copy( camera.position);
+				
+				renderer.render( scene, camera );
+
+			}
+			
+			function onDocumentMouseWheel( event ) {
+				
+				if ( event.wheelDeltaY ) {
+					camera.fov -= event.wheelDeltaY * 0.01;
+				} else if ( event.wheelDelta ) {
+					camera.fov -= event.wheelDelta * 0.01;			
+				} else if ( event.detail ) {
+					camera.fov -= event.detail * 0.01;
+				}
+				
+				if(camera.fov<2)camera.fov=2;
+				if(camera.fov>70)camera.fov=70;
+				
+				camera.updateProjectionMatrix();
+						
+			}
+		
+		</script>
+
+	</body>
+
+<!-- Mirrored from www.vincemckelvie.com/Potluck/Backflips/ by HTTrack Website Copier/3.x [XR&CO'2014], Sat, 04 Feb 2023 06:30:29 GMT -->
+</html>
+
